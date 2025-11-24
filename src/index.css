@@ -1,0 +1,71 @@
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&family=Poppins:wght@500;600;700&display=swap");
+@import "tailwindcss";
+:root {
+  --bg: #252a2f;
+  --card: #2d3238;
+  --line: #3c4147;
+  --accent: #34dfa9;
+  --text: #ffffff;
+  --muted: #9da3af;
+  --soft: #1f2327;
+}
+
+body {
+  font-family: "Open Sans", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h2,
+h1 {
+  font-family: Poppins, sans-serif;
+}
+
+/* GLASSMORPHISM */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* NEON PULSE BORDER */
+@keyframes neonPulse {
+  0% {
+    box-shadow: 0 0 8px rgba(52, 223, 169, 0.2),
+      0 0 15px rgba(52, 223, 169, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(52, 223, 169, 0.45),
+      0 0 28px rgba(52, 223, 169, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(52, 223, 169, 0.2),
+      0 0 15px rgba(52, 223, 169, 0.15);
+  }
+}
+
+.animate-neon {
+  animation: neonPulse 3.5s infinite ease-in-out;
+}
+
+/* SLIDE UP FADE */
+@keyframes slideFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide {
+  animation: slideFadeUp 0.75s ease forwards;
+}
+
+/* INPUT GLOW */
+input.glow-input:focus {
+  box-shadow: 0 0 12px rgba(52, 223, 169, 0.55);
+  border-color: var(--accent);
+}
