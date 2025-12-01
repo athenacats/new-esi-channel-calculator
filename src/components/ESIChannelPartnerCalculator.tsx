@@ -11,10 +11,13 @@ const currencyFmt = new Intl.NumberFormat(undefined, {
 
 const pctFmt = (n: number | string) => `${(Number(n) || 0).toFixed(1)}%`;
 
-function numberFromInput(v: any, fallback = 0) {
+function numberFromInput(v: any, fallback = 0): any {
+  if (v === "") return "";
   if (v === null || v === undefined) return fallback;
+
   const n =
     typeof v === "number" ? v : Number(String(v).replace(/[^0-9.\-]/g, ""));
+
   return Number.isFinite(n) ? n : fallback;
 }
 
