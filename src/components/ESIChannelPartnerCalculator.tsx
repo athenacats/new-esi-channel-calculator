@@ -228,6 +228,17 @@ export default function EsiChannelPartnerRoiCalculator() {
               Reset
             </button>
           </div>
+          <div className="mb-10 flex items-center justify-between">
+            <p
+              className="
+          text-l font-poppins font-normal text-white
+          
+        "
+            >
+              A high level summary of your estimated commissions and revenue
+              outcomes based on the inputs below.
+            </p>
+          </div>
 
           {/* SUMMARY CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
