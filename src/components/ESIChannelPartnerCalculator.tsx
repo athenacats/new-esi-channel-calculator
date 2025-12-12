@@ -948,7 +948,7 @@ export default function EsiChannelPartnerRoiCalculator() {
           
         "
             >
-              3. Talking Points
+              3. Understanding Your Estimated Earnings
             </h2>
 
             <ul className="list-disc pl-6 text-sm text-white space-y-2">
