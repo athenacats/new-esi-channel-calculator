@@ -1,18 +1,18 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&family=Poppins:wght@500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&family=Poppins:wght@500;600;700&display=swap");
 
 :root {
-  --bg:#252a2f;
-  --card:#2d3238;
-  --line:#3c4147;
-  --accent:#34dfa9;
-  --text:#ffffff;
-  --muted:#9da3af;
-  --soft:#1f2327;
+  --bg: #252a2f;
+  --card: #2d3238;
+  --line: #3c4147;
+  --accent: #34dfa9;
+  --text: #ffffff;
+  --muted: #9da3af;
+  --soft: #1f2327;
 }
 
 body {
-  font-family: 'Open Sans', sans-serif;
+  font-family: "Open Sans", sans-serif;
   background: var(--bg);
-  color: var(--text);
+  color: #252a2f;
 }
