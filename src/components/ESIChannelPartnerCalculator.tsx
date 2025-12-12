@@ -197,7 +197,7 @@ export default function EsiChannelPartnerRoiCalculator() {
       ref={pdfRef}
       id="pdf-wrapper"
       className="bg-[#252a2f]"
-      style={{ backgroundColor: "#252a2f" }}
+      style={{ backgroundColor: "#252a2f", opacity: 1, isolation: "isolate" }}
     >
       {
         <div

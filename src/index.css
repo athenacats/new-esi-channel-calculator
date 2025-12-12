@@ -69,3 +69,10 @@ input.glow-input:focus {
   box-shadow: 0 0 12px rgba(52, 223, 169, 0.55);
   border-color: var(--accent);
 }
+
+#pdf-wrapper * {
+  opacity: 1 !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  mix-blend-mode: normal !important;
+}
