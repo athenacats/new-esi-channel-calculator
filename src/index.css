@@ -98,3 +98,9 @@ input.glow-input:focus {
   transform: none !important;
   translate: none !important;
 }
+
+#pdf-wrapper.exporting input,
+#pdf-wrapper.exporting button {
+  border-radius: 6px !important;
+  border: 1px solid #4a4a4a !important;
+}
