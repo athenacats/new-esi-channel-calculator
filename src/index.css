@@ -76,3 +76,25 @@ input.glow-input:focus {
   backdrop-filter: none !important;
   mix-blend-mode: normal !important;
 }
+
+/* Force dark background during export */
+#pdf-wrapper.exporting {
+  background: #252a2f !important;
+  isolation: isolate;
+}
+
+/* Fix input and button text alignment during export */
+#pdf-wrapper.exporting input,
+#pdf-wrapper.exporting button {
+  line-height: 1.2 !important;
+  height: 38px !important;
+  padding: 6px 10px !important;
+  font-size: 14px !important;
+  vertical-align: middle !important;
+}
+
+/* Prevent clipping of text inside flex elements */
+#pdf-wrapper.exporting * {
+  transform: none !important;
+  translate: none !important;
+}

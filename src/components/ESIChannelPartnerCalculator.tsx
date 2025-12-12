@@ -180,7 +180,7 @@ export default function EsiChannelPartnerRoiCalculator() {
       },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     };
-
+    element.classList.add("exporting");
     try {
       await (html2pdf as any)
         .default() // required for ES imports
@@ -188,6 +188,7 @@ export default function EsiChannelPartnerRoiCalculator() {
         .from(element)
         .save();
     } finally {
+      element.classList.remove("exporting");
     }
   }
 
