@@ -214,7 +214,7 @@ export default function EsiChannelPartnerRoiCalculator() {
     if (!element) return;
 
     const opt: any = {
-      margin: 0,
+      margin: 10, // give it a little breathing room
       filename: "ESI-Channel-ROI-Calculator.pdf",
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: {
@@ -223,16 +223,16 @@ export default function EsiChannelPartnerRoiCalculator() {
         backgroundColor: "#252a2f",
         scrollY: 0,
         scrollX: 0,
+        windowWidth: 1200, // match your max-w-6xl feel
+        width: 1200, // lock render width
       },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      jsPDF: { unit: "pt", format: "letter", orientation: "portrait" }, // or "a4"
+      pagebreak: { mode: ["css", "legacy"] },
     };
+
     element.classList.add("exporting");
     try {
-      await (html2pdf as any)
-        .default() // required for ES imports
-        .set(opt)
-        .from(element)
-        .save();
+      await (html2pdf as any).default().set(opt).from(element).save();
     } finally {
       element.classList.remove("exporting");
     }
