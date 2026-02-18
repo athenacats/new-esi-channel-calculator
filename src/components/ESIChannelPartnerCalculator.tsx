@@ -20,11 +20,14 @@ function numberFromInput(v: any, fallback = 0): any {
   return Number.isFinite(n) ? n : fallback;
 }
 
+const DEFAULT_COMMISSION_PCT = 15;
+const DEFAULT_BOOK_PCT = 100;
+
 export default function EsiChannelPartnerRoiCalculator() {
   /* ---------------- STATES ---------------- */
   const [tiers, setTiers] = useState<
     Array<{ label: string; amount: number; pct: number }>
-  >([{ label: "Tier 1", amount: 250000, pct: 5 }]);
+  >([{ label: "Book 1", amount: 250000, pct: 5 }]);
 
   const [inputMode, setInputMode] = useState<"byClients" | "byWSE">(
     "byClients"
@@ -33,21 +36,10 @@ export default function EsiChannelPartnerRoiCalculator() {
   const [avgWsePerClient, setAvgWsePerClient] = useState(18);
   const [totalWseDirect, setTotalWseDirect] = useState(360);
   const [avgAnnualWage, setAvgAnnualWage] = useState(55000);
-  const [mgmtFeePerWse, setMgmtFeePerWse] = useState(1200);
+  const [mgmtFeePerWse, setMgmtFeePerWse] = useState(1500);
   const [conversionRate, setConversionRate] = useState(25);
   const pdfRef = useRef<HTMLDivElement>(null);
   const [masterPlanPct, setMasterPlanPct] = useState(1);
-
-  const [customCommissionPct, setCustomCommissionPct] = useState(15);
-  const [bookPortionPct, setBookPortionPct] = useState(100);
-
-  const [tierCustom, setTierCustom] = useState<{
-    [key: number]: {
-      commissionPct: number;
-      bookPct: number;
-      masterPct: number;
-    };
-  }>({});
 
   /* ---------------- DERIVED ---------------- */
 
@@ -82,51 +74,106 @@ export default function EsiChannelPartnerRoiCalculator() {
   const commissionFromRate = (ratePct: number) =>
     grossMgmtFee * (numberFromInput(ratePct) / 100);
 
-  const customCommission = commissionFromRate(customCommissionPct);
-  const adjustedBook =
-    totalBookCommission * (numberFromInput(bookPortionPct) / 100);
+  const mgmtFeeCommission = commissionFromRate(DEFAULT_COMMISSION_PCT);
+  const adjustedBook = totalBookCommission * (DEFAULT_BOOK_PCT / 100);
+  const totalRevenue = mgmtFeeCommission + adjustedBook + masterPlanCommission;
+  const valueAddedAbsTotal = totalRevenue - totalBookCommission;
 
-  const customTotalRevenue =
-    customCommission + adjustedBook + masterPlanCommission;
-
-  const customMgmtSharePct =
-    customTotalRevenue > 0
-      ? (customCommission / customTotalRevenue) * 100
-      : NaN;
-
-  const customBookSharePct =
-    customTotalRevenue > 0 ? (adjustedBook / customTotalRevenue) * 100 : NaN;
-
-  const customUpliftAbs = customTotalRevenue - totalBookCommission;
-
-  const customUpliftPct =
+  const valueAddedPctTotal =
     totalBookCommission > 0
-      ? (customUpliftAbs / totalBookCommission) * 100
-      : NaN;
+      ? (valueAddedAbsTotal / totalBookCommission) * 100
+      : 0;
 
-  const perClientAddedRevCustom = clients
-    ? customCommission / numberFromInput(clients)
-    : 0;
+  const mgmtShareTotal =
+    totalRevenue > 0 ? (mgmtFeeCommission / totalRevenue) * 100 : 0;
 
-  /* -------- STATIC SAMPLE (Standard CP) -------- */
-  const STATIC_CP_MGMT = 21600;
-  const STATIC_CP_BOOK = 12500;
-  const STATIC_CP_TOTAL = STATIC_CP_MGMT + STATIC_CP_BOOK;
-  const STATIC_CP_UPLIFT_ABS = STATIC_CP_TOTAL - STATIC_CP_BOOK;
-  const STATIC_CP_UPLIFT_PCT = (STATIC_CP_UPLIFT_ABS / STATIC_CP_BOOK) * 100;
-  const STATIC_CP_MGMT_SHARE = (STATIC_CP_MGMT / STATIC_CP_TOTAL) * 100;
-  const STATIC_CP_BOOK_SHARE = (STATIC_CP_BOOK / STATIC_CP_TOTAL) * 100;
+  const bookShareTotal =
+    totalRevenue > 0 ? (adjustedBook / totalRevenue) * 100 : 0;
+
+  // Scenario rows (per book) + totals for the table
+  const scenarioRows = useMemo(() => {
+    const commissionPct = DEFAULT_COMMISSION_PCT;
+    const bookPct = DEFAULT_BOOK_PCT;
+    const masterPct = masterPlanPct;
+
+    // This is global (from WSE inputs) and is the same for every row unless you later decide to allocate it.
+    const mgmtCommissionEach = grossMgmtFee * (commissionPct / 100);
+
+    const rows = tiers.map((t) => {
+      const bookCommission =
+        numberFromInput(t.amount) * (numberFromInput(t.pct) / 100);
+      const adjustedBookLocal = bookCommission * (bookPct / 100);
+      const masterLocal = bookCommission * (masterPct / 100);
+
+      const totalRevenueLocal =
+        mgmtCommissionEach + adjustedBookLocal + masterLocal;
+
+      const upliftAbsLocal = totalRevenueLocal - bookCommission;
+      const upliftPctLocal =
+        bookCommission > 0 ? (upliftAbsLocal / bookCommission) * 100 : 0;
+
+      const mgmtShareLocal =
+        totalRevenueLocal > 0
+          ? (mgmtCommissionEach / totalRevenueLocal) * 100
+          : 0;
+      const bookShareLocal =
+        totalRevenueLocal > 0
+          ? (adjustedBookLocal / totalRevenueLocal) * 100
+          : 0;
+
+      return {
+        label: t.label,
+        mgmtCommission: mgmtCommissionEach,
+        bookCommission,
+        adjustedBook: adjustedBookLocal,
+        master: masterLocal,
+        totalRevenue: totalRevenueLocal,
+        upliftAbs: upliftAbsLocal,
+        upliftPct: upliftPctLocal,
+        mgmtShare: mgmtShareLocal,
+        bookShare: bookShareLocal,
+      };
+    });
+
+    const totals = rows.reduce(
+      (acc, r) => {
+        acc.mgmtCommission += r.mgmtCommission;
+        acc.adjustedBook += r.adjustedBook;
+        acc.master += r.master;
+        acc.totalRevenue += r.totalRevenue;
+        return acc;
+      },
+      { mgmtCommission: 0, adjustedBook: 0, master: 0, totalRevenue: 0 }
+    );
+
+    const totalBookBase = totalBookCommission; // sum of all book commissions
+    const valueAddedAbs = totals.totalRevenue - totalBookBase;
+    const valueAddedPct =
+      totalBookBase > 0 ? (valueAddedAbs / totalBookBase) * 100 : 0;
+
+    const mgmtShareTotal =
+      totals.totalRevenue > 0
+        ? (totals.mgmtCommission / totals.totalRevenue) * 100
+        : 0;
+    const bookShareTotal =
+      totals.totalRevenue > 0
+        ? (totals.adjustedBook / totals.totalRevenue) * 100
+        : 0;
+
+    return {
+      rows,
+      totals: {
+        ...totals,
+        totalBookBase,
+        valueAddedAbs,
+        valueAddedPct,
+        mgmtShareTotal,
+        bookShareTotal,
+      },
+    };
+  }, [tiers, grossMgmtFee, masterPlanPct, totalBookCommission]);
 
   /* ---------------- HANDLERS ---------------- */
-
-  function ensureTierDefaults(idx: number) {
-    if (!tierCustom[idx]) {
-      setTierCustom((prev) => ({
-        ...prev,
-        [idx]: { commissionPct: 15, bookPct: 100, masterPct: 1 },
-      }));
-    }
-  }
 
   function updateTier(
     idx: number,
@@ -142,7 +189,7 @@ export default function EsiChannelPartnerRoiCalculator() {
     if (tiers.length >= 5) return;
     setTiers((prev) => [
       ...prev,
-      { label: `Tier ${prev.length + 1}`, amount: 0, pct: 5 },
+      { label: `Book ${prev.length + 1}`, amount: 250000, pct: 5 },
     ]);
   }
 
@@ -151,16 +198,15 @@ export default function EsiChannelPartnerRoiCalculator() {
   }
 
   function resetAll() {
-    setTiers([{ label: "Tier 1", amount: 250000, pct: 5 }]);
+    setTiers([{ label: "Book 1", amount: 250000, pct: 5 }]);
     setInputMode("byClients");
     setClients(20);
     setAvgWsePerClient(18);
     setTotalWseDirect(360);
     setAvgAnnualWage(55000);
-    setMgmtFeePerWse(1200);
+    setMgmtFeePerWse(1500);
     setConversionRate(25);
-    setCustomCommissionPct(15);
-    setBookPortionPct(100);
+    setMasterPlanPct(1);
   }
 
   async function exportPDF() {
@@ -243,33 +289,6 @@ export default function EsiChannelPartnerRoiCalculator() {
             >
               A high level summary of your estimated commissions and revenue
               outcomes based on the inputs below.
-            </p>
-          </div>
-          <div className="mb-10 ">
-            <span
-              className="
-          text-l font-poppins font-semibold text-[var(--accent)] text-center"
-            >
-              Disclaimer:
-            </span>
-            <p
-              className="
-          text-sm font-poppins text-white
-          
-        "
-            >
-              This calculator provides a high level illustration based solely on
-              the information entered above. For advanced AOR scenarios, custom
-              commission structures, multi-tier book analysis, or full revenue
-              optimization models, please contact our sales team.
-              <br></br>
-              <br></br>
-              Your current book commission is estimated based on your annualized
-              group health insurance billing. If eligible, placing your book on
-              ESI’s Master Health Plan may provide an additional commission
-              percentage (default: 1 percent in this model). Actual
-              qualification depends on underwriting requirements and plan
-              participation rules.
             </p>
           </div>
 
@@ -359,7 +378,7 @@ export default function EsiChannelPartnerRoiCalculator() {
             </h2>
 
             <p className="text-sm text-[var(--muted)] mb-4">
-              Add up to five tiers to mirror your existing commission structure.
+              Add up to five books to mirror your existing commission structure.
             </p>
 
             <div className="space-y-4">
@@ -368,7 +387,7 @@ export default function EsiChannelPartnerRoiCalculator() {
                   {/* LABEL */}
                   <div className="col-span-12 sm:col-span-4">
                     <label className="block text-xs text-white mb-1">
-                      Label
+                      Book
                     </label>
                     <input
                       type="text"
@@ -387,7 +406,7 @@ export default function EsiChannelPartnerRoiCalculator() {
                   {/* AMOUNT */}
                   <div className="col-span-12 sm:col-span-4">
                     <label className="block text-xs text-white mb-1">
-                      Tier Amount ($)
+                      Total Book Amount ($)
                     </label>
                     <input
                       type="number"
@@ -468,7 +487,7 @@ export default function EsiChannelPartnerRoiCalculator() {
                 transition-all duration-150
               "
                 >
-                  + Add Tier
+                  + Add Book
                 </button>
 
                 <div className="text-sm text-[var(--muted)]">
@@ -660,262 +679,84 @@ export default function EsiChannelPartnerRoiCalculator() {
                 </div>
               </div>
             </div>
-
-            {/* CUSTOM COMMISSION — NO SLIDERS */}
-            <div
-              className="
-    rounded-2xl p-5 mb-6 
-    bg-[var(--soft)] border border-[var(--line)]
-    shadow-[0_0_20px_rgba(0,0,0,0.35)]
-  "
-            >
-              <h3 className="text-sm font-semibold mb-4 text-white">
-                Find Out Your Commission: Customize Below
-              </h3>
-
-              {/* TABLE HEADER */}
-              <div className="grid grid-cols-5 gap-4 text-sm text-white mb-2">
-                <div>Scenario</div>
-                <div className="text-right">Mgmt Fee Commission</div>
-                <div className="text-right">Your Current Book</div>
-                <div className="text-right">Total Revenue</div>
-                <div className="text-right">Value Added</div>
-              </div>
-
-              {tiers.map((t, idx) => {
-                const cfg = tierCustom[idx] ?? {
-                  commissionPct: 15,
-                  bookPct: 100,
-                  masterPct: 1,
-                };
-
-                const bookRevenue =
-                  numberFromInput(t.amount) * (numberFromInput(t.pct) / 100);
-
-                const mgmtCommission = grossMgmtFee * (cfg.commissionPct / 100);
-
-                const adjustedBookLocal =
-                  totalBookCommission * (cfg.bookPct / 100);
-
-                const masterLocal = totalBookCommission * (cfg.masterPct / 100);
-
-                const totalRevenueLocal =
-                  mgmtCommission + adjustedBookLocal + masterLocal;
-
-                const upliftAbsLocal = totalRevenueLocal - totalBookCommission;
-                const upliftPctLocal =
-                  totalBookCommission > 0
-                    ? (upliftAbsLocal / totalBookCommission) * 100
-                    : 0;
-
-                return (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-5 gap-4 text-sm text-white py-4 border-t border-[var(--line)]"
-                  >
-                    {/* LABEL */}
-                    <div className="font-semibold">{t.label}</div>
-
-                    {/* MGMT COMMISSION */}
-                    <div className="text-right">
-                      <div className="text-[var(--accent)] font-semibold">
-                        {currencyFmt.format(mgmtCommission)}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {pctFmt((mgmtCommission / totalRevenueLocal) * 100)} of
-                        total
-                      </div>
-
-                      <label className="block text-xs text-[var(--muted)] mt-2">
-                        Commission %
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={50}
-                        value={cfg.commissionPct}
-                        onChange={(e) =>
-                          setTierCustom((prev) => ({
-                            ...prev,
-                            [idx]: {
-                              ...cfg,
-                              commissionPct: numberFromInput(e.target.value),
-                            },
-                          }))
-                        }
-                        className="w-20 bg-[#1d2023] border border-[var(--line)]
-              rounded-lg px-2 py-1 text-right text-white
-              focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                      />
-                    </div>
-
-                    {/* BOOK */}
-                    <div className="text-right">
-                      <div className="text-[var(--accent)] font-semibold">
-                        {currencyFmt.format(adjustedBookLocal)}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {currencyFmt.format(bookRevenue)} base
-                      </div>
-
-                      <label className="block text-xs text-[var(--muted)] mt-2">
-                        Book % of Base
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={cfg.bookPct}
-                        onChange={(e) =>
-                          setTierCustom((prev) => ({
-                            ...prev,
-                            [idx]: {
-                              ...cfg,
-                              bookPct: numberFromInput(e.target.value),
-                            },
-                          }))
-                        }
-                        className="w-20 bg-[#1d2023] border border-[var(--line)]
-              rounded-lg px-2 py-1 text-right text-white
-              focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                      />
-                    </div>
-
-                    {/* MASTER PLAN */}
-                    <div className="text-right">
-                      <div className="text-[var(--accent)] font-semibold">
-                        {currencyFmt.format(masterLocal)}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {pctFmt(cfg.masterPct)} of book (optional)
-                      </div>
-
-                      <label className="block text-xs text-[var(--muted)] mt-2">
-                        Master Plan %
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={5}
-                        value={cfg.masterPct}
-                        onChange={(e) =>
-                          setTierCustom((prev) => ({
-                            ...prev,
-                            [idx]: {
-                              ...cfg,
-                              masterPct: numberFromInput(e.target.value),
-                            },
-                          }))
-                        }
-                        className="w-20 bg-[#1d2023] border border-[var(--line)]
-              rounded-lg px-2 py-1 text-right text-white
-              focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                      />
-                    </div>
-
-                    {/* TOTAL / VALUE */}
-                    <div className="text-right">
-                      <div className="text-[var(--accent)] font-semibold">
-                        {currencyFmt.format(totalRevenueLocal)}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      {pctFmt(upliftPctLocal)}
-                      <div className="text-xs text-[var(--muted)]">
-                        {currencyFmt.format(upliftAbsLocal)} added
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
             {/* ========== DYNAMIC TIER SUMMARY (REPLACES STATIC EXAMPLE) ========== */}
-            <div
-              className="
-    rounded-2xl p-5 mb-6 
-    bg-[var(--soft)] border border-[var(--line)]
-    shadow-[0_0_20px_rgba(0,0,0,0.35)]
-  "
-            >
-              <h3 className="text-sm font-semibold mb-3 text-white">
-                Summary of Your Tier Revenue Scenarios
-              </h3>
+            <h3 className="text-sm font-semibold mb-3 text-white">
+              Summary of Your Book Revenue Scenarios
+            </h3>
 
-              <div className="grid grid-cols-5 gap-4 text-sm text-white mb-2">
-                <div>Scenario</div>
-                <div className="text-right">Management Fee Commission</div>
-                <div className="text-right">Your Current Book</div>
-                <div className="text-right">Total Revenue</div>
-                <div className="text-right">Value Added</div>
-              </div>
-
-              {tiers.map((t, idx) => {
-                const cfg = tierCustom[idx] ?? {
-                  commissionPct: 15,
-                  bookPct: 100,
-                  masterPct: 1,
-                };
-
-                const bookRevenue =
-                  numberFromInput(t.amount) * (numberFromInput(t.pct) / 100);
-
-                const mgmtCommission = grossMgmtFee * (cfg.commissionPct / 100);
-
-                const adjustedBookLocal =
-                  totalBookCommission * (cfg.bookPct / 100);
-
-                const masterLocal = totalBookCommission * (cfg.masterPct / 100);
-
-                const totalRevenueLocal =
-                  mgmtCommission + adjustedBookLocal + masterLocal;
-
-                const upliftAbsLocal = totalRevenueLocal - totalBookCommission;
-
-                const upliftPctLocal =
-                  totalBookCommission > 0
-                    ? (upliftAbsLocal / totalBookCommission) * 100
-                    : 0;
-
-                return (
-                  <div className="grid grid-cols-5 gap-4 text-sm text-white py-3 border-t border-[var(--line)]">
-                    <div className="font-semibold">{t.label}</div>
-
-                    {/* Management Fee */}
-                    <div className="text-right">
-                      {currencyFmt.format(mgmtCommission)}
-                      <div className="text-xs text-[var(--muted)]">
-                        {pctFmt((mgmtCommission / totalRevenueLocal) * 100)} of
-                        total
-                      </div>
-                    </div>
-
-                    {/* Book */}
-                    <div className="text-right">
-                      {currencyFmt.format(adjustedBookLocal)}
-                      <div className="text-xs text-[var(--muted)]">
-                        {pctFmt((adjustedBookLocal / totalRevenueLocal) * 100)}{" "}
-                        of total
-                      </div>
-                    </div>
-
-                    {/* Total */}
-                    <div className="text-right">
-                      {currencyFmt.format(totalRevenueLocal)}
-                    </div>
-
-                    {/* Value Added */}
-                    <div className="text-right">
-                      {pctFmt(upliftPctLocal)}
-                      <div className="text-xs text-[var(--muted)]">
-                        {currencyFmt.format(upliftAbsLocal)} added
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-5 gap-4 text-sm text-white mb-2">
+              <div>Scenario</div>
+              <div className="text-right">Management Fee Commission</div>
+              <div className="text-right">Your Current Book</div>
+              <div className="text-right">Total Revenue</div>
+              <div className="text-right">Value Added</div>
             </div>
+
+            {scenarioRows.rows.map((r) => (
+              <div
+                key={r.label}
+                className="grid grid-cols-5 gap-4 text-sm text-white py-3 border-t border-[var(--line)]"
+              >
+                <div className="font-semibold">{r.label}</div>
+
+                <div className="text-right">
+                  {currencyFmt.format(r.mgmtCommission)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {pctFmt(r.mgmtShare)} of total
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  {currencyFmt.format(r.adjustedBook)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {pctFmt(r.bookShare)} of total
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  {currencyFmt.format(r.totalRevenue)}
+                </div>
+
+                <div className="text-right">
+                  {pctFmt(r.upliftPct)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {currencyFmt.format(r.upliftAbs)} added
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {tiers.length > 1 && (
+              <div className="grid grid-cols-5 gap-4 text-sm text-white py-3 border-t border-[var(--line)]">
+                <div className="font-semibold">Total</div>
+
+                <div className="text-right">
+                  {currencyFmt.format(scenarioRows.totals.mgmtCommission)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {pctFmt(scenarioRows.totals.mgmtShareTotal)} of total
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  {currencyFmt.format(scenarioRows.totals.adjustedBook)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {pctFmt(scenarioRows.totals.bookShareTotal)} of total
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  {currencyFmt.format(scenarioRows.totals.totalRevenue)}
+                </div>
+
+                <div className="text-right">
+                  {pctFmt(scenarioRows.totals.valueAddedPct)}
+                  <div className="text-xs text-[var(--muted)]">
+                    {currencyFmt.format(scenarioRows.totals.valueAddedAbs)}{" "}
+                    added
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
           <button
             onClick={exportPDF}
@@ -954,9 +795,9 @@ export default function EsiChannelPartnerRoiCalculator() {
                 Your current book commission is based on your
                 <span className="font-semibold text-[var(--accent)]">
                   {" "}
-                  annualized group health insurance billing
+                  annualized book of business
                 </span>
-                . This calculator uses your entered tier structure to estimate
+                . This calculator uses your entered book structure to estimate
                 those totals.
               </li>
 
@@ -970,34 +811,20 @@ export default function EsiChannelPartnerRoiCalculator() {
               </li>
 
               <li>
-                At a{" "}
+                You indicated a{" "}
                 <span className="text-[var(--accent)] font-semibold">
                   {Math.round(conversionRate)}%
                 </span>{" "}
-                conversion, your custom scenario generates{" "}
+                conversion, this scenario generates{" "}
                 <span className="text-[var(--accent)] font-semibold">
-                  {currencyFmt.format(customCommission)}
+                  {currencyFmt.format(mgmtFeeCommission)}
                 </span>{" "}
-                in management-fee commissions at {customCommissionPct}%,
-                bringing your total estimated revenue to{" "}
+                in management-fee commissions, bringing your total estimated
+                revenue to{" "}
                 <span className="text-[var(--accent)] font-semibold">
-                  {currencyFmt.format(customTotalRevenue)}
+                  {currencyFmt.format(totalRevenue)}
                 </span>
                 .
-              </li>
-
-              <li>
-                If eligible, placing your book on
-                <span className="font-semibold text-[var(--accent)]">
-                  {" "}
-                  ESI’s Master Health Plan
-                </span>{" "}
-                may add an additional{" "}
-                <span className="font-semibold text-[var(--accent)]">
-                  {pctFmt(masterPlanPct)}
-                </span>{" "}
-                commission on your total book (shown above as an optional
-                component).
               </li>
 
               <li>
@@ -1010,8 +837,19 @@ export default function EsiChannelPartnerRoiCalculator() {
 
           {/* FOOTER */}
           <footer className="mt-6 text-xs text-[var(--muted)] text-center">
-            Disclaimer: This calculator is for illustration purposes only. It is
-            not a quote or guarantee. All figures are annual & pre-tax.
+            <p>
+              This calculator provides a high level illustration based solely on
+              the information entered above. It is not a quote or guarantee. For
+              advanced AOR scenarios, custom commission structures, multi-tier
+              book analysis, or full revenue optimization models, please contact
+              our sales team. <br></br>
+              <br></br> Your current book commission is estimated based on your
+              annualized group health insurance billing. If eligible, placing
+              your book on ESI’s Master Health Plan may provide an additional
+              commission percentage (default: 1 percent in this model). Actual
+              qualification depends on underwriting requirements and plan
+              participation rules.
+            </p>
           </footer>
         </div>
       }
